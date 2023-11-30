@@ -1,0 +1,66 @@
+name: Build and Publish Docker Image
+
+on:
+  push:
+    branches:
+      - versi-support
+    paths-ignore:
+      - '**/*.md'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.idea/**'
+      - '.vscode/**'
+      - 'CODEOWNERS'
+      - 'LICENSE.txt'
+  pull_request:
+    branches:
+      - versi-support
+    paths-ignore:
+      - '**/*.md'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.idea/**'
+      - '.vscode/**'
+      - 'CODEOWNERS'
+      - 'LICENSE.txt'
+
+env:
+  DOCKERFILE: "Dockerfile"
+  IMAGE_NAME: paritytech/calamar
+  PUSH_IMAGE: false # decision whether to push image will be taken at a later step. Testing is done without pushing.
+
+jobs:
+  build-publish-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up tag
+        run: echo "IMAGE_TAG=versi-support-${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Check if event is push
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          echo "PUSH_IMAGE=true" >> $GITHUB_ENV
+
+      - name: Log in to Docker Hub
+        if: ${{ env.PUSH_IMAGE == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build/Push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          push: ${{ env.PUSH_IMAGE }}
+          file: ${{ env.DOCKERFILE }}
+          build-args: |
+            VCS_REF="${{ github.sha }}"
+            build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            build-arg VERSION="$IMAGE_TAG"
+            build-arg PROJECT_NAME="$GITHUB_REPOSITORY"
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME }}:latest
